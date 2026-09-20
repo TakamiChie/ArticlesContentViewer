@@ -1,3 +1,5 @@
+import { markdownToHtml } from './markdown.js';
+
 const $ = id => document.getElementById(id);
 const state = { page: 1, pages: 1, items: [], selected: new Map(), busy: false, controller: null, result: '', searchController: null, detailController: null };
 function el(tag, text, className) {
@@ -157,7 +159,7 @@ $('summarize').onclick = async () => {
   try {
     const data = await api('/api/summarize', { ...config(), ids, instruction }, state.controller.signal);
     clearInterval(timer);
-    $('result').textContent = data.text;
+    $('result').innerHTML = markdownToHtml(data.text);
     $('generationStatus').textContent = ['生成完了。原音・原文と照合してからご利用ください。', ...data.warnings].join('\n');
     for (const source of data.sources) {
       const li = el('li'); const link = el('a', `[${source.number}] ${source.title}`);

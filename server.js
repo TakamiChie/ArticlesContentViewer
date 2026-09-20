@@ -148,7 +148,7 @@ export function createApp(db) {
         const text = await chat(data, `${task}\n資料（JSONまたは中間要約）:\n${inputs.join('\n')}`, controller.signal);
         return send(200, { text, warnings, sources: rows.map((r, i) => ({ number: i + 1, title: r.title, url: r.url, content_id: r.content_id })) });
       }
-      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/markdown.js': ['markdown.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname];
         res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: http:; frame-src https://listen.style; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" });
