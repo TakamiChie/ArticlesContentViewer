@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Yu Gothic", sans-serif;
+  color: #263d3b;
+  background: #f4f5ef;
+  line-height: 1.65;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { background: #173e3a; color: #fff; padding: 35px max(5vw, 20px); display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+h1 { font-size: clamp(23px, 3vw, 35px); margin: 8px 0; font-weight: 650; }
+header p { color: #d3e1d8; margin: 0; }
+.eyebrow { font-size: 11px; letter-spacing: .17em; font-weight: 700; }
+main { max-width: 1500px; padding: 28px; margin: auto; }
+button, input, select, textarea { font: inherit; }
+button { border: 1px solid #bccdc5; background: #fff; color: #254c43; border-radius: 7px; padding: 8px 13px; cursor: pointer; }
+button:hover { background: #e9f1e9; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+:focus-visible { outline: 3px solid #be850e; outline-offset: 3px; }
+.primary { background: #235e50; color: white; border-color: #235e50; }
+.primary:hover { background: #174b3e; }
+label { display: block; font-size: 13px; font-weight: 650; }
+input:not([type=checkbox]), select, textarea { display: block; width: 100%; border: 1px solid #bdcdc4; background: white; color: #263d3b; border-radius: 6px; padding: 10px; margin-top: 6px; }
+textarea { resize: vertical; }
+.filters { display: grid; grid-template-columns: 2.5fr 1.3fr 1fr 1fr 1fr; gap: 14px; }
+.toolbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin: 14px 0; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: start; }
+aside { position: sticky; top: 20px; background: #e7ece1; padding: 23px; border-radius: 12px; }
+aside button { margin-top: 10px; width: 100%; }
+h2 { font-size: 20px; margin: 8px 0; }
+.card { background: #fff; border: 1px solid #dbe2d8; border-radius: 10px; padding: 21px; margin-bottom: 13px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 16px; }
+.card:has(input:checked) { border-color: #2d8065; background: #f6fcf7; }
+.card input { width: 18px; height: 18px; accent-color: #276a54; }
+.card h3 { font-size: 18px; margin: 6px 0; }
+.title { border: 0; text-align: left; padding: 0; background: transparent; color: #214f44; font-weight: 700; overflow-wrap: anywhere; }
+.meta, .hint { font-size: 12px; color: #60716b; }
+.summary { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 9px 0; }
+.summary.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-size: 12px; padding: 3px 8px; border: 0; background: #edf2e8; border-radius: 4px; max-width: 100%; overflow-wrap: anywhere; }
+.pagination { display: flex; justify-content: center; gap: 18px; align-items: center; padding: 18px; }
+#selected { max-height: 240px; overflow: auto; font-size: 13px; }
+.selectedItem { display: flex; gap: 8px; align-items: start; border-bottom: 1px solid #cbd7c6; padding: 8px 0; }
+.selectedItem span { flex: 1; overflow-wrap: anywhere; }
+.selectedItem button { width: auto; margin: 0; padding: 0 7px; }
+hr { border: 0; border-top: 1px solid #ccd5c7; margin: 23px 0; }
+dialog { width: min(820px, 95vw); max-height: 90vh; border: 1px solid #cbd8ce; border-radius: 12px; padding: 28px; color: #263d3b; }
+dialog::backdrop { background: #102c2a99; }
+#settings { max-width: 560px; }
+#settings label { margin: 16px 0; }
+iframe { width: 100%; height: 178px; border: 0; margin: 18px 0; }
+a { color: #24654f; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+#resultPanel { background: #fff; padding: 28px; border-radius: 12px; margin-top: 25px; }
+#status, #modelStatus { color: #943e22; }
+#detailBody h3 { border-top: 1px solid #d6e1d8; padding-top: 18px; }
+#detailBody img { max-width: 110px; border-radius: 7px; float: right; margin: 0 0 12px 15px; }
+[hidden] { display: none !important; }
+@media (max-width: 1050px) {
+  .filters { grid-template-columns: 1fr 1fr; }
+  .search { grid-column: 1 / -1; }
+  .workspace { grid-template-columns: minmax(0, 1fr) 275px; }
+}
+@media (max-width: 720px) {
+  header { align-items: start; flex-direction: column; padding: 24px; }
+  main { padding: 16px; }
+  .workspace { grid-template-columns: 1fr; }
+  aside { position: static; }
+  .toolbar { flex-wrap: wrap; }
+  .card { padding: 15px; gap: 10px; }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "onpu-content-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node demo.js && node server.js demo.sqlite",
+    "test": "node --test"
+  }
+}
