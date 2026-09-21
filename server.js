@@ -30,6 +30,14 @@ export function aggregateLlmTags(rows) {
   }
   return [...aggregated.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
 }
+export function compileTranscripts(rows) {
+  return rows.flatMap(row => {
+    const transcript = typeof row?.transcript_vtt === 'string' ? row.transcript_vtt.trim() : '';
+    if (!transcript) return [];
+    const title = String(row.title || 'タイトルなし').replace(/[\r\n]+/g, ' ').trim();
+    return [`# ${title}\n${transcript}`];
+  }).join('\n\n');
+}
 export function openDatabase(path) {
   const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 });
   db.exec('PRAGMA query_only = ON');
@@ -132,10 +140,19 @@ export function createApp(db) {
         const row = db.prepare(`SELECT ${fields}, a.transcript_vtt ${join} WHERE a.content_id = ?`).get(p.get('id'));
         return row ? send(200, row) : send(404, { error: '記事が見つかりません。' });
       }
-      if (req.method === 'POST' && ['/api/models', '/api/summarize'].includes(url.pathname)) {
+      if (req.method === 'POST' && ['/api/models', '/api/summarize', '/api/transcripts'].includes(url.pathname)) {
         if (!req.headers['content-type']?.startsWith('application/json')) throw fail('application/json が必要です。', 415);
         const data = await jsonBody(req), controller = new AbortController();
         res.on('close', () => controller.abort());
+        if (url.pathname === '/api/transcripts') {
+          if (!Array.isArray(data.ids) || data.ids.length === 0 || data.ids.some(x => typeof x !== 'string')) throw fail('コンテンツを1件以上選択してください。');
+          const ids = [...new Set(data.ids)];
+          const statement = db.prepare('SELECT title, transcript_vtt FROM ARTICLE WHERE content_id = ?');
+          const rows = ids.map(id => statement.get(id)).filter(Boolean);
+          if (rows.length !== ids.length) throw fail('選択した記事が見つかりません。一覧を更新してください。');
+          const available = rows.filter(row => typeof row.transcript_vtt === 'string' && row.transcript_vtt.trim());
+          return send(200, { text: compileTranscripts(available), count: available.length });
+        }
         if (url.pathname === '/api/models') {
           const result = await llmRequest(data, '/models', null, controller.signal);
           return send(200, { models: (result.data || []).map(x => x.id) });

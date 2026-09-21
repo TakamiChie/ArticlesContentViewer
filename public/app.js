@@ -52,6 +52,7 @@ function updateSelected() {
   }
   $('summarize').disabled = state.busy || state.selected.size < 2 || state.selected.size > 100;
   $('exportLinks').disabled = state.selected.size === 0;
+  $('exportTranscripts').disabled = state.selected.size === 0;
 }
 function render() {
   $('list').replaceChildren();
@@ -220,12 +221,23 @@ $('models').onclick = async () => {
   } catch (error) { $('modelFetchStatus').textContent = error.message; }
   finally { $('models').disabled = false; }
 };
-function save(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+function save(name, text, type = 'text/markdown;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = el('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function references(rows) { return rows.map((r, i) => `${r.number || i + 1}. ${r.title}\n   ${safeUrl(r.url) || 'URLなし'}\n   ID: ${r.content_id}`).join('\n'); }
 $('exportLinks').onclick = () => save('selected-contents.md', `# 選択したコンテンツ\n\n${references([...state.selected.values()])}\n`);
+$('exportTranscripts').onclick = async () => {
+  const button = $('exportTranscripts');
+  button.disabled = true; $('exportStatus').textContent = '文字起こしを準備中…';
+  try {
+    const data = await api('/api/transcripts', { ids: [...state.selected.keys()] });
+    if (!data.count) { $('exportStatus').textContent = '選択した項目に文字起こし（VTT）はありません。'; return; }
+    save('selected-transcripts.txt', data.text, 'text/plain;charset=utf-8');
+    $('exportStatus').textContent = `${data.count}件の文字起こしを保存しました。`;
+  } catch (error) { $('exportStatus').textContent = error.message; }
+  finally { button.disabled = state.selected.size === 0; }
+};
 $('saveResult').onclick = () => save('content-summary.md', state.result);
 $('cancel').onclick = () => state.controller?.abort();
 $('summarize').onclick = async () => {
