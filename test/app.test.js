@@ -23,12 +23,15 @@ test('LLM tags support stored formats and aggregate per content', () => {
   ]);
 });
 
-test('VTT文字起こしを記事タイトル付きで連結し、空のVTTを除外する', () => {
+test('選択した項目を記事タイトル付きで連結し、タグを見出し直下に配置する', () => {
   assert.equal(compileTranscripts([
-    { title: '記事A', transcript_vtt: 'WEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n' },
+    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', transcript_vtt: 'WEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n', llm_summary: '概要A' },
     { title: '空の記事', transcript_vtt: '  ' },
     { title: '記事\nB', transcript_vtt: 'WEBVTT\n\n本文' }
-  ]), '# 記事A\nWEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n\n# 記事 B\nWEBVTT\n\n本文');
+  ]), '# 記事A\n\n文字起こし:\nWEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n\n# 記事 B\n\n文字起こし:\nWEBVTT\n\n本文');
+  assert.equal(compileTranscripts([
+    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', transcript_vtt: '本文', llm_summary: '概要A' }
+  ], ['llm_tags', 'url', 'published_at', 'source_name', 'transcript_vtt', 'llm_summary']), '# 記事A\n\n#地域 #教育\n\nURL: https://example.com/a\n\n公開日時: 2026-09-20\n\n番組名: 番組A\n\n文字起こし:\n本文\n\nLLM概要:\n概要A');
 });
 
 test('schema, all rows, literal search, paging, detail, LLM and origin protection', async () => {
@@ -64,10 +67,18 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent('地域 活動'))).json(); assert.equal(data.total, 1);
     data = await (await fetch(base + '/api/tags')).json();
     assert.deepEqual(data.tags, [{ tag: '地域', count: 2 }, { tag: '教育', count: 1 }, { tag: '福祉', count: 1 }]);
-    data = await (await post('/api/transcripts', { ids: ['2', '1', '0'] })).json();
+    data = await (await post('/api/transcripts', { ids: ['2', '1', '0'], include: ['transcript_vtt'] })).json();
     assert.equal(data.count, 2);
-    assert.equal(data.text, '# 記事2\nWEBVTT\n\n記事2の本文\n\n# 100% テスト ＡＢＣ\nWEBVTT\n\n記事0の本文');
-    assert.equal((await post('/api/transcripts', { ids: ['missing'] })).status, 400);
+    assert.equal(data.text, '# 記事2\n\n文字起こし:\nWEBVTT\n\n記事2の本文\n\n# 100% テスト ＡＢＣ\n\n文字起こし:\nWEBVTT\n\n記事0の本文');
+    data = await (await post('/api/transcripts', { ids: ['2', '1'], include: ['llm_tags', 'source_name', 'llm_summary'] })).json();
+    assert.equal(data.count, 2);
+    assert.match(data.text, /^# 記事2\n\n#地域 #教育\n\n番組名: 配信元\n\nLLM概要:\n概要/);
+    assert.match(data.text, /# 記事1\n\n番組名: 配信元\n\nLLM概要:\n地域の活動$/);
+    data = await (await post('/api/transcripts', { ids: ['0'] })).json();
+    assert.equal(data.count, 1);
+    assert.equal((await post('/api/transcripts', { ids: ['missing'], include: ['transcript_vtt'] })).status, 400);
+    assert.equal((await post('/api/transcripts', { ids: ['0'], include: [] })).status, 400);
+    assert.equal((await post('/api/transcripts', { ids: ['0'], include: ['summary'] })).status, 400);
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent("' OR 1=1 --"))).json(); assert.equal(data.total, 0);
     data = await (await fetch(base + '/api/article?id=34')).json(); assert.equal(data.content_id, '34'); assert.equal(data.source_name, null);
     assert.throws(() => db.exec('DELETE FROM ARTICLE'), /readonly/);

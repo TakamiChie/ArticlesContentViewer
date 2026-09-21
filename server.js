@@ -30,12 +30,30 @@ export function aggregateLlmTags(rows) {
   }
   return [...aggregated.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
 }
-export function compileTranscripts(rows) {
+const exportFields = ['llm_tags', 'url', 'published_at', 'source_name', 'transcript_vtt', 'llm_summary'];
+export function compileTranscripts(rows, include = ['transcript_vtt']) {
+  const selected = new Set(include);
   return rows.flatMap(row => {
     const transcript = typeof row?.transcript_vtt === 'string' ? row.transcript_vtt.trim() : '';
-    if (!transcript) return [];
-    const title = String(row.title || 'タイトルなし').replace(/[\r\n]+/g, ' ').trim();
-    return [`# ${title}\n${transcript}`];
+    if (selected.has('transcript_vtt') && !transcript) return [];
+    const title = String(row?.title || 'タイトルなし').replace(/[\r\n]+/g, ' ').trim();
+    const sections = [`# ${title}`];
+    if (selected.has('llm_tags')) {
+      const uniqueTags = new Map();
+      for (const rawTag of parseLlmTags(row.llm_tags)) {
+        const tag = rawTag.replace(/^#+/, '').trim();
+        const key = norm(tag);
+        if (key && !uniqueTags.has(key)) uniqueTags.set(key, tag);
+      }
+      const hashtags = [...uniqueTags.values()].map(tag => `#${tag}`);
+      if (hashtags.length) sections.push(hashtags.join(' '));
+    }
+    if (selected.has('url')) sections.push(`URL: ${String(row.url || '').trim() || '未登録'}`);
+    if (selected.has('published_at')) sections.push(`公開日時: ${String(row.published_at || '').trim() || '未登録'}`);
+    if (selected.has('source_name')) sections.push(`番組名: ${String(row.source_name || '').trim() || '未登録'}`);
+    if (selected.has('transcript_vtt')) sections.push(`文字起こし:\n${transcript}`);
+    if (selected.has('llm_summary')) sections.push(`LLM概要:\n${String(row.llm_summary || '').trim() || '未生成'}`);
+    return [sections.join('\n\n')];
   }).join('\n\n');
 }
 export function openDatabase(path) {
@@ -146,12 +164,15 @@ export function createApp(db) {
         res.on('close', () => controller.abort());
         if (url.pathname === '/api/transcripts') {
           if (!Array.isArray(data.ids) || data.ids.length === 0 || data.ids.some(x => typeof x !== 'string')) throw fail('コンテンツを1件以上選択してください。');
+          const requestedInclude = data.include ?? ['transcript_vtt'];
+          if (!Array.isArray(requestedInclude) || requestedInclude.length === 0 || requestedInclude.some(x => !exportFields.includes(x))) throw fail('保存する項目を1つ以上選択してください。');
           const ids = [...new Set(data.ids)];
-          const statement = db.prepare('SELECT title, transcript_vtt FROM ARTICLE WHERE content_id = ?');
+          const include = [...new Set(requestedInclude)];
+          const statement = db.prepare(`SELECT a.title, a.url, a.published_at, a.llm_tags, a.transcript_vtt, a.llm_summary, s.source_name ${join} WHERE a.content_id = ?`);
           const rows = ids.map(id => statement.get(id)).filter(Boolean);
           if (rows.length !== ids.length) throw fail('選択した記事が見つかりません。一覧を更新してください。');
-          const available = rows.filter(row => typeof row.transcript_vtt === 'string' && row.transcript_vtt.trim());
-          return send(200, { text: compileTranscripts(available), count: available.length });
+          const available = include.includes('transcript_vtt') ? rows.filter(row => typeof row.transcript_vtt === 'string' && row.transcript_vtt.trim()) : rows;
+          return send(200, { text: compileTranscripts(available, include), count: available.length });
         }
         if (url.pathname === '/api/models') {
           const result = await llmRequest(data, '/models', null, controller.signal);

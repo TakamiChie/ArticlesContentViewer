@@ -31,6 +31,23 @@
     <section id="resultPanel" hidden><div class="toolbar"><h2>活動につなげるまとめ</h2><button id="saveResult">Markdownで保存</button></div><p id="generationStatus" role="status"></p><article id="result" class="markdown-body"></article><ul id="references"></ul></section>
   </main>
   <dialog id="detail"><div class="toolbar"><span class="eyebrow">CONTENT DETAIL</span><button id="detailClose">閉じる</button></div><div id="detailBody"></div></dialog>
+  <dialog id="transcriptExport">
+    <form id="transcriptExportForm">
+      <h2>テキストに含める項目</h2>
+      <p>記事タイトルは常に見出しとして保存されます。</p>
+      <fieldset class="exportOptions">
+        <legend>保存項目</legend>
+        <label><input type="checkbox" name="include" value="llm_tags"> LLMタグ</label>
+        <label><input type="checkbox" name="include" value="url"> URL</label>
+        <label><input type="checkbox" name="include" value="published_at"> 公開日時</label>
+        <label><input type="checkbox" name="include" value="source_name"> 番組名</label>
+        <label><input type="checkbox" name="include" value="transcript_vtt" checked> 文字起こし</label>
+        <label><input type="checkbox" name="include" value="llm_summary"> LLM概要</label>
+      </fieldset>
+      <p id="transcriptExportError" class="formError" role="alert"></p>
+      <div class="toolbar dialogActions"><button id="transcriptExportCancel" type="button">キャンセル</button><button type="submit" class="primary">保存</button></div>
+    </form>
+  </dialog>
   <dialog id="settings"><h2>ローカルLLMの接続</h2><p>LM StudioなどのOpenAI互換APIに接続します。</p><label>APIベースURL<input id="baseUrl" value="http://127.0.0.1:1234/v1"></label><label>APIキー（必要な場合のみ・保存されません）<input id="apiKey" type="password" autocomplete="off"></label><button id="models">モデル一覧を取得</button><p id="modelFetchStatus" role="status"></p><p class="hint">取得した候補は「まとめる視点」の下にあるモデルID欄から選択できます。</p><div class="toolbar"><button id="settingsClose">閉じる</button><button id="settingsSave" class="primary">設定を保存</button></div></dialog>
 </body>
 </html>
