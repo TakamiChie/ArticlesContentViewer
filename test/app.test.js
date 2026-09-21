@@ -5,7 +5,23 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import http from 'node:http';
-import { openDatabase, createApp, llmBase } from '../server.js';
+import { openDatabase, createApp, llmBase, parseLlmTags, aggregateLlmTags } from '../server.js';
+
+test('LLM tags support stored formats and aggregate per content', () => {
+  assert.deepEqual(parseLlmTags('["地域", "教育"]'), ['地域', '教育']);
+  assert.deepEqual(parseLlmTags('地域、教育\n#活動'), ['地域', '教育', '#活動']);
+  assert.deepEqual(aggregateLlmTags([
+    { llm_tags: '["地域", "地域", "教育"]' },
+    { llm_tags: '地域，福祉' },
+    { llm_tags: '["ＲＥＤ"]' },
+    { llm_tags: '["red"]' }
+  ]), [
+    { tag: 'ＲＥＤ', count: 2 },
+    { tag: '地域', count: 2 },
+    { tag: '教育', count: 1 },
+    { tag: '福祉', count: 1 }
+  ]);
+});
 
 test('schema, all rows, literal search, paging, detail, LLM and origin protection', async () => {
   const temp = mkdtempSync(join(tmpdir(), 'viewer-'));
@@ -15,7 +31,7 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
   writer.prepare('INSERT INTO SOURCE VALUES (1, ?, ?, ?, ?, ?)').run('test', '配信元', 'podcast', '', null);
   writer.exec('PRAGMA foreign_keys = OFF');
   const insert = writer.prepare('INSERT INTO ARTICLE(content_id, source_id, title, url, llm_summary, llm_tags) VALUES (?, ?, ?, ?, ?, ?)');
-  for (let i = 0; i < 35; i++) insert.run(String(i), i === 34 ? 999 : 1, i === 0 ? '100% テスト ＡＢＣ' : `記事${i}`, 'https://listen.style/p/test/example', i === 1 ? '地域の活動' : '概要', i === 2 ? '["地域"]' : null);
+  for (let i = 0; i < 35; i++) insert.run(String(i), i === 34 ? 999 : 1, i === 0 ? '100% テスト ＡＢＣ' : `記事${i}`, 'https://listen.style/p/test/example', i === 1 ? '地域の活動' : '概要', i === 2 ? '["地域", "教育", "地域"]' : i === 3 ? '地域、福祉' : null);
   writer.close();
   const db = openDatabase(path), server = createApp(db);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -35,9 +51,11 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
     data = await (await fetch(base + '/api/articles?page=2')).json(); assert.equal(data.items.length, 5);
     for (const q of ['%', 'abc', '地域']) {
       data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent(q))).json();
-      assert.equal(data.total, q === '地域' ? 2 : 1);
+      assert.equal(data.total, q === '地域' ? 3 : 1);
     }
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent('地域 活動'))).json(); assert.equal(data.total, 1);
+    data = await (await fetch(base + '/api/tags')).json();
+    assert.deepEqual(data.tags, [{ tag: '地域', count: 2 }, { tag: '教育', count: 1 }, { tag: '福祉', count: 1 }]);
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent("' OR 1=1 --"))).json(); assert.equal(data.total, 0);
     data = await (await fetch(base + '/api/article?id=34')).json(); assert.equal(data.content_id, '34'); assert.equal(data.source_name, null);
     assert.throws(() => db.exec('DELETE FROM ARTICLE'), /readonly/);

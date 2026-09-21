@@ -1,7 +1,7 @@
 import { markdownToHtml } from './markdown.js';
 
 const $ = id => document.getElementById(id);
-const state = { page: 1, pages: 1, items: [], selected: new Map(), busy: false, controller: null, result: '', searchController: null, detailController: null };
+const state = { page: 1, pages: 1, items: [], tags: new Set(), models: [], visibleModels: [], selected: new Map(), busy: false, controller: null, result: '', searchController: null, detailController: null };
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -15,7 +15,7 @@ function tags(value) {
   if (!value) return [];
   try {
     const data = JSON.parse(value);
-    if (Array.isArray(data)) return data.map(x => typeof x === 'string' ? x : JSON.stringify(x));
+    if (Array.isArray(data)) return data.map(x => typeof x === 'string' ? x : JSON.stringify(x)).map(x => x.trim()).filter(Boolean);
   } catch { /* Plain-text tag lists are also supported. */ }
   return String(value).split(/[,，、\n]+|\s+(?=#)/).map(x => x.trim()).filter(Boolean);
 }
@@ -116,10 +116,26 @@ async function detail(id) {
 }
 let debounce;
 $('query').oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => { state.page = 1; load().catch(report); }, 250); };
+let appliedTag = '';
+function searchTag() {
+  const tag = $('tagSelect').value.trim();
+  const key = tag.normalize('NFKC').toLowerCase();
+  if (!state.tags.has(key)) { appliedTag = ''; return; }
+  if (appliedTag === key && $('query').value === tag && $('field').value === 'llm_tags') return;
+  appliedTag = key;
+  clearTimeout(debounce);
+  $('query').value = tag;
+  $('field').value = 'llm_tags';
+  state.page = 1;
+  load().catch(report);
+}
+$('tagSelect').oninput = searchTag;
+$('tagSelect').onchange = searchTag;
+$('tagSelect').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); searchTag(); } };
 for (const id of ['field', 'source', 'type', 'sort']) $(id).onchange = () => { state.page = 1; load().catch(report); };
 $('prev').onclick = () => { state.page--; load().catch(report); };
 $('next').onclick = () => { state.page++; load().catch(report); };
-$('refresh').onclick = () => load().catch(report);
+$('refresh').onclick = () => Promise.all([loadTags(), load()]).catch(report);
 $('pageSelect').onclick = () => { state.items.forEach(row => state.selected.set(row.content_id, row)); render(); };
 $('clear').onclick = () => { state.selected.clear(); render(); };
 $('settingsOpen').onclick = () => $('settings').showModal();
@@ -129,14 +145,79 @@ $('settingsSave').onclick = () => {
   try { localStorage.setItem('onpu-llm', JSON.stringify({ baseUrl, model })); } catch { $('status').textContent = '設定を永続保存できないため、この画面を開いている間のみ使用します。'; }
   $('settings').close();
 };
+let activeModel = -1;
+function closeModelList() {
+  $('modelList').hidden = true;
+  $('model').setAttribute('aria-expanded', 'false');
+  $('modelToggle').setAttribute('aria-expanded', 'false');
+  $('model').removeAttribute('aria-activedescendant');
+  activeModel = -1;
+}
+function highlightModel(index) {
+  const options = [...$('modelList').querySelectorAll('[role="option"]')];
+  if (!options.length) return;
+  activeModel = (index + options.length) % options.length;
+  options.forEach((option, i) => { option.classList.toggle('active', i === activeModel); option.setAttribute('aria-selected', String(i === activeModel)); });
+  $('model').setAttribute('aria-activedescendant', options[activeModel].id);
+  options[activeModel].scrollIntoView({ block: 'nearest' });
+}
+function persistModel() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('onpu-llm') || '{}');
+    localStorage.setItem('onpu-llm', JSON.stringify({ ...saved, model: $('model').value.trim() }));
+  } catch { /* Storage may be disabled. */ }
+}
+function chooseModel(model) {
+  $('model').value = model;
+  $('modelStatus').textContent = '';
+  persistModel();
+  closeModelList();
+  $('model').focus();
+}
+function openModelList(showAll = false) {
+  const query = showAll ? '' : $('model').value.normalize('NFKC').toLowerCase();
+  state.visibleModels = state.models.filter(model => model.normalize('NFKC').toLowerCase().includes(query));
+  const options = state.visibleModels.map((model, i) => {
+    const option = el('button', model); option.type = 'button'; option.id = `modelOption${i}`; option.setAttribute('role', 'option'); option.tabIndex = -1;
+    option.onmousedown = event => event.preventDefault();
+    option.onclick = () => chooseModel(model);
+    return option;
+  });
+  $('modelList').replaceChildren(...(options.length ? options : [el('div', state.models.length ? '一致する候補はありません。' : '接続設定からモデル一覧を取得してください。', 'comboEmpty')]));
+  $('modelList').hidden = false;
+  $('model').setAttribute('aria-expanded', 'true');
+  $('modelToggle').setAttribute('aria-expanded', 'true');
+  activeModel = -1;
+}
+$('model').onfocus = () => openModelList(true);
+$('model').onclick = () => openModelList(true);
+$('model').oninput = () => openModelList(false);
+$('model').onchange = persistModel;
+$('model').onblur = () => setTimeout(() => { if (!document.activeElement?.closest('.modelPicker')) closeModelList(); });
+$('model').onkeydown = event => {
+  if (event.key === 'Escape') { closeModelList(); return; }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if ($('modelList').hidden) openModelList(true);
+    highlightModel(activeModel + (event.key === 'ArrowDown' ? 1 : -1));
+  } else if (event.key === 'Enter' && activeModel >= 0) {
+    event.preventDefault(); chooseModel(state.visibleModels[activeModel]);
+  }
+};
+$('modelToggle').onclick = () => {
+  if ($('modelList').hidden) { openModelList(true); $('model').focus({ preventScroll: true }); }
+  else closeModelList();
+};
+document.addEventListener('mousedown', event => { if (!event.target.closest('.modelPicker')) closeModelList(); });
 $('models').onclick = async () => {
-  $('models').disabled = true; $('modelStatus').textContent = '接続中…';
+  $('models').disabled = true; $('modelFetchStatus').textContent = '接続中…';
   try {
     const data = await api('/api/models', config());
-    $('modelList').replaceChildren(...data.models.map(model => { const option = el('option'); option.value = model; return option; }));
+    state.models = [...new Set(data.models.filter(model => typeof model === 'string' && model))];
     if (!$('model').value && data.models[0]) $('model').value = data.models[0];
-    $('modelStatus').textContent = `${data.models.length}件のモデルを取得しました。`;
-  } catch (error) { $('modelStatus').textContent = error.message; }
+    $('modelFetchStatus').textContent = `${state.models.length}件のモデルを取得しました。設定を保存して閉じてから、モデルID欄で選択してください。`;
+    $('modelStatus').textContent = `${state.models.length}件のモデル候補を利用できます。`;
+  } catch (error) { $('modelFetchStatus').textContent = error.message; }
   finally { $('models').disabled = false; }
 };
 function save(name, text) {
@@ -148,7 +229,7 @@ $('exportLinks').onclick = () => save('selected-contents.md', `# 選択したコ
 $('saveResult').onclick = () => save('content-summary.md', state.result);
 $('cancel').onclick = () => state.controller?.abort();
 $('summarize').onclick = async () => {
-  if (!config().model) { $('modelStatus').textContent = 'モデルを取得または入力してください。'; $('settings').showModal(); return; }
+  if (!config().model) { $('modelStatus').textContent = 'モデルIDを入力するか、LLM接続設定で一覧を取得してください。'; $('model').focus(); return; }
   state.busy = true; state.controller = new AbortController(); updateSelected();
   $('cancel').hidden = false; $('resultPanel').hidden = false; $('saveResult').disabled = true;
   $('result').textContent = ''; $('references').replaceChildren();
@@ -171,8 +252,18 @@ $('summarize').onclick = async () => {
   } catch (error) { clearInterval(timer); $('generationStatus').textContent = error.name === 'AbortError' ? '生成を中止しました。' : error.message; }
   finally { clearInterval(timer); state.busy = false; $('cancel').hidden = true; updateSelected(); }
 };
+async function loadTags() {
+  const data = await api('/api/tags');
+  state.tags.clear();
+  $('tagOptions').replaceChildren();
+  for (const item of data.tags) {
+    state.tags.add(item.tag.normalize('NFKC').toLowerCase());
+    const option = el('option'); option.value = item.tag; option.label = `${item.count.toLocaleString()}件`;
+    $('tagOptions').append(option);
+  }
+}
 async function init() {
-  const meta = await api('/api/meta');
+  const [meta] = await Promise.all([api('/api/meta'), loadTags()]);
   for (const source of meta.sources) { const option = el('option', source.source_name); option.value = source.id; $('source').append(option); }
   for (const type of [...new Set(meta.sources.map(x => x.source_type))]) { const option = el('option', type); option.value = type; $('type').append(option); }
   await load();

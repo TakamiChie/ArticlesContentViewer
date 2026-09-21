@@ -7,6 +7,29 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const norm = value => String(value ?? '').normalize('NFKC').toLowerCase();
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+export function parseLlmTags(value) {
+  if (!value) return [];
+  try {
+    const data = JSON.parse(value);
+    if (Array.isArray(data)) return data.map(x => typeof x === 'string' ? x : JSON.stringify(x)).map(x => x.trim()).filter(Boolean);
+  } catch { /* Plain-text tag lists are also supported. */ }
+  return String(value).split(/[,，、\n]+|\s+(?=#)/).map(x => x.trim()).filter(Boolean);
+}
+export function aggregateLlmTags(rows) {
+  const aggregated = new Map();
+  for (const row of rows) {
+    const seen = new Set();
+    for (const tag of parseLlmTags(row.llm_tags)) {
+      const key = norm(tag);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const current = aggregated.get(key);
+      if (current) current.count++;
+      else aggregated.set(key, { tag, count: 1 });
+    }
+  }
+  return [...aggregated.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
+}
 export function openDatabase(path) {
   const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 });
   db.exec('PRAGMA query_only = ON');
@@ -100,6 +123,10 @@ export function createApp(db) {
       }
       if (req.method === 'GET' && url.pathname === '/api/meta') {
         return send(200, { sources: db.prepare('SELECT id, source_name, source_type FROM SOURCE ORDER BY source_name').all(), total: db.prepare('SELECT COUNT(*) AS n FROM ARTICLE').get().n });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/tags') {
+        const tags = aggregateLlmTags(db.prepare("SELECT llm_tags FROM ARTICLE WHERE llm_tags IS NOT NULL AND TRIM(llm_tags) <> ''").all());
+        return send(200, { tags });
       }
       if (req.method === 'GET' && url.pathname === '/api/article') {
         const row = db.prepare(`SELECT ${fields}, a.transcript_vtt ${join} WHERE a.content_id = ?`).get(p.get('id'));

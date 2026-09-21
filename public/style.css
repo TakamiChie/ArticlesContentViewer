@@ -23,6 +23,7 @@ label { display: block; font-size: 13px; font-weight: 650; }
 input:not([type=checkbox]), select, textarea { display: block; width: 100%; border: 1px solid #bdcdc4; background: white; color: #263d3b; border-radius: 6px; padding: 10px; margin-top: 6px; }
 textarea { resize: vertical; }
 .filters { display: grid; grid-template-columns: 2.5fr 1.3fr 1fr 1fr 1fr; gap: 14px; }
+.tagFilter { margin-top: 10px; }
 .toolbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin: 14px 0; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: start; }
 aside {
@@ -38,6 +39,15 @@ aside {
   border-radius: 12px;
 }
 aside button { margin-top: 10px; width: 100%; }
+.modelPicker { margin-top: 16px; }
+.comboControl { display: grid; grid-template-columns: minmax(0, 1fr) 42px; }
+.comboControl input { min-width: 0; margin-top: 6px; border-radius: 6px 0 0 6px; }
+.comboControl #modelToggle { width: 42px; margin-top: 6px; border-left: 0; border-radius: 0 6px 6px 0; padding: 8px; }
+.comboOptions { max-height: 190px; overflow-y: auto; border: 1px solid #bdcdc4; border-top: 0; background: #fff; }
+.comboOptions button { width: 100%; margin: 0; border: 0; border-radius: 0; padding: 8px 10px; text-align: left; overflow-wrap: anywhere; }
+.comboOptions button + button { border-top: 1px solid #e1e8e2; }
+.comboOptions button.active, .comboOptions button:hover { background: #e0ece3; }
+.comboEmpty { padding: 8px 10px; color: #60716b; font-size: 12px; }
 h2 { font-size: 20px; margin: 8px 0; }
 .card { background: #fff; border: 1px solid #dbe2d8; border-radius: 10px; padding: 21px; margin-bottom: 13px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 16px; }
 .card:has(input:checked) { border-color: #2d8065; background: #f6fcf7; }
@@ -81,7 +91,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .markdown-body table { width: 100%; border-collapse: collapse; }
 .markdown-body th, .markdown-body td { border: 1px solid #ccd9d1; padding: 8px 10px; text-align: left; }
 .markdown-body th { background: #edf3ec; }
-#status, #modelStatus { color: #943e22; }
+#status, #modelStatus, #modelFetchStatus { color: #943e22; }
 #detailBody h3 { border-top: 1px solid #d6e1d8; padding-top: 18px; }
 #detailBody img { max-width: 110px; border-radius: 7px; float: right; margin: 0 0 12px 15px; }
 [hidden] { display: none !important; }
