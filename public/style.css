@@ -25,6 +25,7 @@ textarea { resize: vertical; }
 .filters { display: grid; grid-template-columns: 2.5fr 1.3fr 1fr 1fr 1fr; gap: 14px; }
 .tagFilter { margin-top: 10px; }
 .toolbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin: 14px 0; }
+.selectionActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: start; }
 aside {
   position: sticky;

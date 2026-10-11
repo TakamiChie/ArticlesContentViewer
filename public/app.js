@@ -1,7 +1,7 @@
 import { markdownToHtml } from './markdown.js';
 
 const $ = id => document.getElementById(id);
-const state = { page: 1, pages: 1, items: [], tags: new Set(), models: [], visibleModels: [], selected: new Map(), busy: false, controller: null, result: '', searchController: null, detailController: null };
+const state = { page: 1, pages: 1, items: [], tags: new Set(), models: [], visibleModels: [], selected: new Map(), busy: false, controller: null, result: '', searchController: null, detailController: null, selectionController: null };
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -75,10 +75,40 @@ function render() {
   $('prev').disabled = state.page <= 1; $('next').disabled = state.page >= state.pages;
   updateSelected();
 }
+function searchParams() {
+  return new URLSearchParams({ q: $('query').value, field: $('field').value, source: $('source').value, type: $('type').value, sort: $('sort').value });
+}
+function cancelSelection() {
+  state.selectionController?.abort();
+  state.selectionController = null;
+  $('allSelect').disabled = false;
+  $('allSelect').textContent = '検索結果をすべて選択';
+}
+async function selectAllMatches() {
+  if (state.selectionController) return;
+  const controller = new AbortController();
+  state.selectionController = controller;
+  $('allSelect').disabled = true;
+  $('allSelect').textContent = '全件を取得中…';
+  $('status').textContent = '';
+  try {
+    const data = await api(`/api/articles/selection?${searchParams()}`, null, controller.signal);
+    if (controller !== state.selectionController) return;
+    for (const row of data.items) state.selected.set(row.content_id, row);
+    render();
+    $('status').textContent = `検索結果${data.items.length.toLocaleString()}件を選択しました。`;
+  } catch (error) {
+    if (controller === state.selectionController) report(error);
+  } finally {
+    if (controller === state.selectionController) cancelSelection();
+  }
+}
 async function load() {
+  cancelSelection();
   state.searchController?.abort(); state.searchController = new AbortController();
   const controller = state.searchController;
-  const params = new URLSearchParams({ q: $('query').value, field: $('field').value, source: $('source').value, type: $('type').value, sort: $('sort').value, page: state.page });
+  const params = searchParams();
+  params.set('page', state.page);
   $('status').textContent = '';
   const data = await api(`/api/articles?${params}`, null, controller.signal);
   if (controller !== state.searchController) return;
@@ -116,7 +146,7 @@ async function detail(id) {
   } catch (error) { if (error.name !== 'AbortError') $('detailBody').replaceChildren(el('p', error.message)); }
 }
 let debounce;
-$('query').oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => { state.page = 1; load().catch(report); }, 250); };
+$('query').oninput = () => { cancelSelection(); clearTimeout(debounce); debounce = setTimeout(() => { state.page = 1; load().catch(report); }, 250); };
 let appliedTag = '';
 function searchTag() {
   const tag = $('tagSelect').value.trim();
@@ -138,7 +168,8 @@ $('prev').onclick = () => { state.page--; load().catch(report); };
 $('next').onclick = () => { state.page++; load().catch(report); };
 $('refresh').onclick = () => Promise.all([loadTags(), load()]).catch(report);
 $('pageSelect').onclick = () => { state.items.forEach(row => state.selected.set(row.content_id, row)); render(); };
-$('clear').onclick = () => { state.selected.clear(); render(); };
+$('allSelect').onclick = selectAllMatches;
+$('clear').onclick = () => { cancelSelection(); state.selected.clear(); render(); };
 $('settingsOpen').onclick = () => $('settings').showModal();
 $('settingsClose').onclick = () => $('settings').close();
 $('settingsSave').onclick = () => {

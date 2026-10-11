@@ -129,7 +129,7 @@ export function createApp(db) {
       if (req.headers.origin && req.headers.origin !== `http://${host}`) throw fail('別のサイトからのアクセスは許可されていません。', 403);
       const url = new URL(req.url, `http://${host}`);
       const p = url.searchParams;
-      if (req.method === 'GET' && url.pathname === '/api/articles') {
+      if (req.method === 'GET' && ['/api/articles', '/api/articles/selection'].includes(url.pathname)) {
         const terms = norm(p.get('q')).split(/\s+/).filter(Boolean);
         const allowed = ['title', 'llm_summary', 'llm_tags'];
         const chosen = allowed.includes(p.get('field')) ? [p.get('field')] : allowed;
@@ -144,6 +144,10 @@ export function createApp(db) {
         const total = db.prepare(`SELECT COUNT(*) AS n ${join} ${where}`).get(...values).n;
         const page = Math.max(1, Math.min(Math.ceil(total / 30) || 1, Number.parseInt(p.get('page')) || 1));
         const sort = p.get('sort') === 'old' ? 'a.published_at ASC' : p.get('sort') === 'title' ? 'a.title COLLATE NOCASE ASC' : 'a.published_at DESC';
+        if (url.pathname === '/api/articles/selection') {
+          const items = db.prepare(`SELECT a.content_id, a.title, a.url ${join} ${where} ORDER BY ${sort}, a.content_id`).all(...values);
+          return send(200, { items });
+        }
         const items = db.prepare(`SELECT ${fields} ${join} ${where} ORDER BY ${sort}, a.content_id LIMIT 30 OFFSET ?`).all(...values, (page - 1) * 30);
         return send(200, { items, total, page, pages: Math.ceil(total / 30) || 1 });
       }

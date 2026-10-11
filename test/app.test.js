@@ -60,6 +60,19 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
     let data = await (await fetch(base + '/api/articles')).json();
     assert.equal(data.total, 35); assert.equal(data.items.length, 30);
     data = await (await fetch(base + '/api/articles?page=2')).json(); assert.equal(data.items.length, 5);
+    data = await (await fetch(base + '/api/articles/selection?page=2')).json();
+    assert.equal(data.items.length, 35);
+    assert.equal(new Set(data.items.map(row => row.content_id)).size, 35);
+    assert.ok(data.items.every(row => row.title && row.url));
+    data = await (await fetch(base + '/api/articles/selection?' + new URLSearchParams({ q: '記事', field: 'title', source: '1', type: 'podcast', sort: 'title', page: '2' }))).json();
+    assert.equal(data.items.length, 33);
+    assert.ok(data.items.every(row => !['0', '34'].includes(row.content_id)));
+    const firstPage = await (await fetch(base + '/api/articles?' + new URLSearchParams({ q: '記事', field: 'title', source: '1', type: 'podcast', sort: 'title' }))).json();
+    assert.deepEqual(data.items.slice(0, 30).map(row => row.content_id), firstPage.items.map(row => row.content_id));
+    data = await (await fetch(base + '/api/articles/selection?' + new URLSearchParams({ q: '地域 活動', field: 'llm_summary', source: '1', type: 'podcast' }))).json();
+    assert.deepEqual(data.items.map(row => row.content_id), ['1']);
+    data = await (await fetch(base + '/api/articles/selection?q=no-match')).json();
+    assert.deepEqual(data.items, []);
     for (const q of ['%', 'abc', '地域']) {
       data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent(q))).json();
       assert.equal(data.total, q === '地域' ? 3 : 1);
