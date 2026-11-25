@@ -30,12 +30,12 @@ export function aggregateLlmTags(rows) {
   }
   return [...aggregated.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ja'));
 }
-const exportFields = ['llm_tags', 'url', 'published_at', 'source_name', 'transcript_vtt', 'llm_summary'];
-export function compileTranscripts(rows, include = ['transcript_vtt']) {
+const exportFields = ['llm_tags', 'url', 'published_at', 'source_name', 'fulltext', 'llm_summary'];
+export function compileTranscripts(rows, include = ['fulltext']) {
   const selected = new Set(include);
   return rows.flatMap(row => {
-    const transcript = typeof row?.transcript_vtt === 'string' ? row.transcript_vtt.trim() : '';
-    if (selected.has('transcript_vtt') && !transcript) return [];
+    const fulltext = typeof row?.fulltext === 'string' ? row.fulltext.trim() : '';
+    if (selected.has('fulltext') && !fulltext) return [];
     const title = String(row?.title || 'タイトルなし').replace(/[\r\n]+/g, ' ').trim();
     const sections = [`# ${title}`];
     if (selected.has('llm_tags')) {
@@ -51,7 +51,11 @@ export function compileTranscripts(rows, include = ['transcript_vtt']) {
     if (selected.has('url')) sections.push(`URL: ${String(row.url || '').trim() || '未登録'}`);
     if (selected.has('published_at')) sections.push(`公開日時: ${String(row.published_at || '').trim() || '未登録'}`);
     if (selected.has('source_name')) sections.push(`番組名: ${String(row.source_name || '').trim() || '未登録'}`);
-    if (selected.has('transcript_vtt')) sections.push(`文字起こし:\n${transcript}`);
+    if (selected.has('fulltext')) {
+      const isWebVtt = /^WEBVTT(?:[ \t][^\r\n]*)?(?:\r\n|\r|\n|$)/.test(fulltext);
+      const heading = isWebVtt ? '文字起こし' : '本文';
+      sections.push(`${heading}:\n${fulltext}`);
+    }
     if (selected.has('llm_summary')) sections.push(`LLM概要:\n${String(row.llm_summary || '').trim() || '未生成'}`);
     return [sections.join('\n\n')];
   }).join('\n\n');
@@ -60,7 +64,7 @@ export function openDatabase(path) {
   const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 });
   db.exec('PRAGMA query_only = ON');
   db.function('search_text', norm);
-  db.prepare('SELECT a.content_id, a.llm_summary, a.llm_tags, s.source_name FROM ARTICLE a LEFT JOIN SOURCE s ON s.id = a.source_id LIMIT 0').all();
+  db.prepare('SELECT a.content_id, a.llm_summary, a.llm_tags, a.fulltext, s.source_name FROM ARTICLE a LEFT JOIN SOURCE s ON s.id = a.source_id LIMIT 0').all();
   return db;
 }
 const fields = `a.content_id, a.source_id, a.title, a.url, a.published_at,
@@ -159,7 +163,7 @@ export function createApp(db) {
         return send(200, { tags });
       }
       if (req.method === 'GET' && url.pathname === '/api/article') {
-        const row = db.prepare(`SELECT ${fields}, a.transcript_vtt ${join} WHERE a.content_id = ?`).get(p.get('id'));
+        const row = db.prepare(`SELECT ${fields}, a.fulltext ${join} WHERE a.content_id = ?`).get(p.get('id'));
         return row ? send(200, row) : send(404, { error: '記事が見つかりません。' });
       }
       if (req.method === 'POST' && ['/api/models', '/api/summarize', '/api/transcripts'].includes(url.pathname)) {
@@ -168,14 +172,14 @@ export function createApp(db) {
         res.on('close', () => controller.abort());
         if (url.pathname === '/api/transcripts') {
           if (!Array.isArray(data.ids) || data.ids.length === 0 || data.ids.some(x => typeof x !== 'string')) throw fail('コンテンツを1件以上選択してください。');
-          const requestedInclude = data.include ?? ['transcript_vtt'];
+          const requestedInclude = data.include ?? ['fulltext'];
           if (!Array.isArray(requestedInclude) || requestedInclude.length === 0 || requestedInclude.some(x => !exportFields.includes(x))) throw fail('保存する項目を1つ以上選択してください。');
           const ids = [...new Set(data.ids)];
           const include = [...new Set(requestedInclude)];
-          const statement = db.prepare(`SELECT a.title, a.url, a.published_at, a.llm_tags, a.transcript_vtt, a.llm_summary, s.source_name ${join} WHERE a.content_id = ?`);
+          const statement = db.prepare(`SELECT a.title, a.url, a.published_at, a.llm_tags, a.fulltext, a.llm_summary, s.source_name ${join} WHERE a.content_id = ?`);
           const rows = ids.map(id => statement.get(id)).filter(Boolean);
           if (rows.length !== ids.length) throw fail('選択した記事が見つかりません。一覧を更新してください。');
-          const available = include.includes('transcript_vtt') ? rows.filter(row => typeof row.transcript_vtt === 'string' && row.transcript_vtt.trim()) : rows;
+          const available = include.includes('fulltext') ? rows.filter(row => typeof row.fulltext === 'string' && row.fulltext.trim()) : rows;
           return send(200, { text: compileTranscripts(available, include), count: available.length });
         }
         if (url.pathname === '/api/models') {

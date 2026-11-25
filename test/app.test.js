@@ -25,13 +25,13 @@ test('LLM tags support stored formats and aggregate per content', () => {
 
 test('選択した項目を記事タイトル付きで連結し、タグを見出し直下に配置する', () => {
   assert.equal(compileTranscripts([
-    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', transcript_vtt: 'WEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n', llm_summary: '概要A' },
-    { title: '空の記事', transcript_vtt: '  ' },
-    { title: '記事\nB', transcript_vtt: 'WEBVTT\n\n本文' }
+    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', fulltext: 'WEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n', llm_summary: '概要A' },
+    { title: '空の記事', fulltext: '  ' },
+    { title: '記事\nB', fulltext: 'WEBVTT\n\n本文' }
   ]), '# 記事A\n\n文字起こし:\nWEBVTT\n\n00:00.000 --> 00:01.000\nこんにちは\n\n# 記事 B\n\n文字起こし:\nWEBVTT\n\n本文');
   assert.equal(compileTranscripts([
-    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', transcript_vtt: '本文', llm_summary: '概要A' }
-  ], ['llm_tags', 'url', 'published_at', 'source_name', 'transcript_vtt', 'llm_summary']), '# 記事A\n\n#地域 #教育\n\nURL: https://example.com/a\n\n公開日時: 2026-09-20\n\n番組名: 番組A\n\n文字起こし:\n本文\n\nLLM概要:\n概要A');
+    { title: '記事A', url: 'https://example.com/a', published_at: '2026-09-20', source_name: '番組A', llm_tags: '["地域", "#教育"]', fulltext: '本文', llm_summary: '概要A' }
+  ], ['llm_tags', 'url', 'published_at', 'source_name', 'fulltext', 'llm_summary']), '# 記事A\n\n#地域 #教育\n\nURL: https://example.com/a\n\n公開日時: 2026-09-20\n\n番組名: 番組A\n\n本文:\n本文\n\nLLM概要:\n概要A');
 });
 
 test('schema, all rows, literal search, paging, detail, LLM and origin protection', async () => {
@@ -41,8 +41,8 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
   writer.exec(readFileSync(new URL('../SCHEME.sql', import.meta.url), 'utf8'));
   writer.prepare('INSERT INTO SOURCE VALUES (1, ?, ?, ?, ?, ?)').run('test', '配信元', 'podcast', '', null);
   writer.exec('PRAGMA foreign_keys = OFF');
-  const insert = writer.prepare('INSERT INTO ARTICLE(content_id, source_id, title, url, llm_summary, llm_tags, transcript_vtt) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  for (let i = 0; i < 35; i++) insert.run(String(i), i === 34 ? 999 : 1, i === 0 ? '100% テスト ＡＢＣ' : `記事${i}`, 'https://listen.style/p/test/example', i === 1 ? '地域の活動' : '概要', i === 2 ? '["地域", "教育", "地域"]' : i === 3 ? '地域、福祉' : null, i === 0 ? 'WEBVTT\n\n記事0の本文' : i === 2 ? 'WEBVTT\n\n記事2の本文' : null);
+  const insert = writer.prepare('INSERT INTO ARTICLE(content_id, source_id, title, url, llm_summary, llm_tags, fulltext) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  for (let i = 0; i < 35; i++) insert.run(String(i), i === 34 ? 999 : 1, i === 0 ? '100% テスト ＡＢＣ' : `記事${i}`, 'https://listen.style/p/test/example', i === 1 ? '地域の活動' : '概要', i === 2 ? '["地域", "教育", "地域"]' : i === 3 ? '地域、福祉' : null, i === 0 ? 'WEBVTT\n\n記事0の本文' : i === 2 ? '記事2の本文' : null);
   writer.close();
   const db = openDatabase(path), server = createApp(db);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -80,19 +80,21 @@ test('schema, all rows, literal search, paging, detail, LLM and origin protectio
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent('地域 活動'))).json(); assert.equal(data.total, 1);
     data = await (await fetch(base + '/api/tags')).json();
     assert.deepEqual(data.tags, [{ tag: '地域', count: 2 }, { tag: '教育', count: 1 }, { tag: '福祉', count: 1 }]);
-    data = await (await post('/api/transcripts', { ids: ['2', '1', '0'], include: ['transcript_vtt'] })).json();
+    data = await (await post('/api/transcripts', { ids: ['2', '1', '0'], include: ['fulltext'] })).json();
     assert.equal(data.count, 2);
-    assert.equal(data.text, '# 記事2\n\n文字起こし:\nWEBVTT\n\n記事2の本文\n\n# 100% テスト ＡＢＣ\n\n文字起こし:\nWEBVTT\n\n記事0の本文');
+    assert.equal(data.text, '# 記事2\n\n本文:\n記事2の本文\n\n# 100% テスト ＡＢＣ\n\n文字起こし:\nWEBVTT\n\n記事0の本文');
     data = await (await post('/api/transcripts', { ids: ['2', '1'], include: ['llm_tags', 'source_name', 'llm_summary'] })).json();
     assert.equal(data.count, 2);
     assert.match(data.text, /^# 記事2\n\n#地域 #教育\n\n番組名: 配信元\n\nLLM概要:\n概要/);
     assert.match(data.text, /# 記事1\n\n番組名: 配信元\n\nLLM概要:\n地域の活動$/);
     data = await (await post('/api/transcripts', { ids: ['0'] })).json();
     assert.equal(data.count, 1);
-    assert.equal((await post('/api/transcripts', { ids: ['missing'], include: ['transcript_vtt'] })).status, 400);
+    assert.equal((await post('/api/transcripts', { ids: ['missing'], include: ['fulltext'] })).status, 400);
     assert.equal((await post('/api/transcripts', { ids: ['0'], include: [] })).status, 400);
     assert.equal((await post('/api/transcripts', { ids: ['0'], include: ['summary'] })).status, 400);
     data = await (await fetch(base + '/api/articles?q=' + encodeURIComponent("' OR 1=1 --"))).json(); assert.equal(data.total, 0);
+    data = await (await fetch(base + '/api/article?id=2')).json();
+    assert.equal(data.fulltext, '記事2の本文');
     data = await (await fetch(base + '/api/article?id=34')).json(); assert.equal(data.content_id, '34'); assert.equal(data.source_name, null);
     assert.throws(() => db.exec('DELETE FROM ARTICLE'), /readonly/);
     assert.throws(() => llmBase('https://example.com/v1'));

@@ -142,7 +142,7 @@ async function detail(id) {
     drawTags(body, row.llm_tags);
     body.append(el('h3', '元の概要'), el('p', row.summary || '未登録', 'summary'));
     if (row.llm_hashtags) body.append(el('h3', 'LLMハッシュタグ'), el('p', row.llm_hashtags));
-    if (row.transcript_vtt) { const details = el('details'); details.append(el('summary', '文字起こし（VTT）を表示'), el('pre', row.transcript_vtt)); body.append(details); }
+    if (row.fulltext) { const details = el('details'); details.append(el('summary', '本文を表示'), el('pre', row.fulltext)); body.append(details); }
   } catch (error) { if (error.name !== 'AbortError') $('detailBody').replaceChildren(el('p', error.message)); }
 }
 let debounce;
@@ -272,7 +272,7 @@ $('transcriptExportForm').onsubmit = async event => {
   button.disabled = true; submit.disabled = true; $('transcriptExportError').textContent = ''; $('exportStatus').textContent = 'テキストを準備中…';
   try {
     const data = await api('/api/transcripts', { ids: [...state.selected.keys()], include });
-    if (!data.count) { $('transcriptExportError').textContent = '選択した項目に文字起こし（VTT）はありません。'; $('exportStatus').textContent = ''; return; }
+    if (!data.count) { $('transcriptExportError').textContent = '選択した項目に本文はありません。'; $('exportStatus').textContent = ''; return; }
     save('selected-transcripts.txt', data.text, 'text/plain;charset=utf-8');
     $('transcriptExport').close();
     $('exportStatus').textContent = `${data.count}件のテキストを保存しました。`;

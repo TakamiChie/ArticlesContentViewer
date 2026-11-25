@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS "ARTICLE" (
 	"cover_art"	TEXT,
 	"summary"	TEXT,
 	"hashtags"	TEXT,
-	"transcript_vtt"	TEXT DEFAULT NULL,
+	"fulltext"	TEXT DEFAULT NULL,
 	"llm_summary"	TEXT DEFAULT NULL,
 	"llm_tags"	TEXT DEFAULT NULL,
 	"llm_hashtags"	TEXT DEFAULT NULL,
